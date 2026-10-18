@@ -5,7 +5,8 @@
 // Socket.io relays offer / answer / ice-candidate to the other player only.
 // Every call attempt has a callId so late messages from an old attempt are ignored.
 
-import { io } from '/socket.io/socket.io.esm.min.js';
+import { connectToServer } from './socket.js';
+import { API_BASE } from './config.js';
 import { HandTracker, describeCameraError } from './hand.js';
 import { getPlayerId, getSavedName, cleanName, isDevMode } from './player.js';
 import { createFriendMatch } from './friend-match.js';
@@ -30,8 +31,6 @@ const TALKING_HOLD_MS = 500; // keep "talking" lit briefly between words
 // A dropped friend shows as "reconnecting…" this long before "left": short blips on mobile
 // data (the server notices a silent drop within ~10 s) shouldn't read as leaving.
 const RECONNECT_GRACE_MS = 15000;
-// Reconnect quickly once the network is back (Socket.io's default waits up to 5 s).
-const SOCKET_OPTIONS = { reconnectionDelay: 500, reconnectionDelayMax: 2000 };
 
 const CALL = Object.freeze({
   WAITING: 'waiting', // friend hasn't opened the game screen yet
@@ -274,7 +273,7 @@ function updateFingerBadge({ handSeen, number }) {
 // ---- Socket + room ----------------------------------------------------------
 
 function connectSocket() {
-  socket = io(SOCKET_OPTIONS);
+  socket = connectToServer();
   match = createFriendMatch({
     socket,
     playerId: state.playerId,
@@ -370,7 +369,7 @@ function friendIn(room) {
 
 async function loadIceConfig() {
   try {
-    const response = await fetch('/ice');
+    const response = await fetch(`${API_BASE}/ice`);
     if (!response.ok) throw new Error(`/ice answered ${response.status}`);
     return await response.json();
   } catch (error) {

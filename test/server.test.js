@@ -117,17 +117,59 @@ test('/health answers 200', async () => {
   assert.equal(response.status, 200);
 });
 
-test('/config.js allows dev mode locally and turns it off when NODE_ENV=production', async () => {
-  assert.match(await (await fetch(`${url}/config.js`)).text(), /DEV_MODE_ALLOWED = true/);
+test('the backend still serves the frontend, including config.js and the shared rules', async () => {
+  for (const file of ['/config.js', '/socket.js', '/shared/rules.js']) {
+    const response = await fetch(`${url}${file}`);
+    assert.equal(response.status, 200, file);
+    assert.match(response.headers.get('content-type'), /javascript/, file);
+  }
+});
 
-  const prod = createGameServer({ env: { NODE_ENV: 'production' } });
-  await new Promise((resolve) => prod.httpServer.listen(0, resolve));
+test('ALLOWED_ORIGINS: listed origins and same-origin pages may call the server; other sites may not', async () => {
+  const { allowedOriginsFromEnv } = await import('../server.js');
+  const parsed = allowedOriginsFromEnv({ ALLOWED_ORIGINS: ' https://hc.vercel.app/ ,http://localhost:3000,' });
+  assert.deepEqual([...parsed], ['https://hc.vercel.app', 'http://localhost:3000']);
+
+  const split = createGameServer({ env: { ALLOWED_ORIGINS: 'https://hc.vercel.app' } });
+  await new Promise((resolve) => split.httpServer.listen(0, resolve));
+  const splitUrl = `http://localhost:${split.httpServer.address().port}`;
+  const opened = [];
+  // Resolves 'connected' or the connect error's message.
+  const tryConnect = (origin) =>
+    new Promise((resolve) => {
+      const socket = connect(splitUrl, { forceNew: true, reconnection: false, extraHeaders: origin ? { origin } : {} });
+      opened.push(socket);
+      socket.on('connect', () => resolve('connected'));
+      socket.on('connect_error', (error) => resolve(error.message));
+    });
   try {
-    const response = await fetch(`http://localhost:${prod.httpServer.address().port}/config.js`);
-    assert.match(response.headers.get('content-type'), /javascript/);
-    assert.match(await response.text(), /DEV_MODE_ALLOWED = false/);
+    const preflight = await fetch(`${splitUrl}/api/me/groups`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://hc.vercel.app', 'access-control-request-headers': 'x-player-id' },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://hc.vercel.app');
+    assert.match(preflight.headers.get('access-control-allow-headers'), /x-player-id/);
+
+    const ice = await fetch(`${splitUrl}/ice`, { headers: { origin: 'https://hc.vercel.app' } });
+    assert.equal(ice.status, 200);
+    assert.equal(ice.headers.get('access-control-allow-origin'), 'https://hc.vercel.app');
+
+    const evil = await fetch(`${splitUrl}/ice`, { headers: { origin: 'https://evil.example' } });
+    assert.equal(evil.status, 403);
+    assert.equal(evil.headers.get('access-control-allow-origin'), null);
+
+    const sameOrigin = await fetch(`${splitUrl}/health`, { headers: { origin: splitUrl } });
+    assert.equal(sameOrigin.status, 200);
+    assert.equal((await fetch(`${splitUrl}/health`)).status, 200); // curl, no Origin
+
+    // Socket.io (long-polling first, like a browser): allowed origin connects, another site is refused.
+    assert.equal(await tryConnect('https://hc.vercel.app'), 'connected');
+    assert.equal(await tryConnect(splitUrl), 'connected');
+    assert.notEqual(await tryConnect('https://evil.example'), 'connected');
   } finally {
-    prod.io.close();
+    for (const socket of opened) socket.disconnect();
+    split.io.close();
   }
 });
 

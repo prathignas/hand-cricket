@@ -4,7 +4,7 @@
 //
 // Phases: toss → idle → countdown → (no_ball | reveal → next) → … → break → … → over
 
-import * as rules from './shared/rules.js';
+import * as rules from './public/shared/rules.js';
 
 export const PHASE = Object.freeze({
   TOSS: 'toss',

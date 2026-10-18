@@ -63,7 +63,7 @@ flowchart LR
 | `server.js` | Starts Express and Socket.io. Wires room events, call-message relay, game inputs and `/api`, and creates and ends each room's match. |
 | `rooms.js` | In-memory rooms: 4-letter codes, 2 players, ready flags, rejoin slots, version numbers, cleanup sweep. |
 | `friend-game.js` | The match referee for one room: phases, toss, timers, numbers, presence/pause, snapshots. |
-| `shared/rules.js` | Pure game rules (play a ball, OUT, chase finished, winner, 50-run milestone). Used by both server and browser. |
+| `public/shared/rules.js` | Pure game rules (play a ball, OUT, chase finished, winner, 50-run milestone). Used by both server and browser. |
 | `groups.js` | Group logic: create/join, invite codes, "my groups", leaderboard, saving matches with retries. |
 | `leaderboard.js` | Pure leaderboard maths: Monday-in-Kolkata week, rank, win %, streak, "wins behind" line. |
 | `stores.js` | Storage: `SupabaseStore` (real DB) and `MemoryStore` (when Supabase isn't configured). |
@@ -446,7 +446,7 @@ Each one is: problem → why it happened → fix → general lesson.
 | ~~Sightscreen is only a visual cover~~ **Fixed** | A modified page could watch the opponent's hand during the countdown | **Built:** each sender switches off the video copy it sends from countdown to reveal (black frames); audio and your own detection unaffected |
 | **No rate limits** | Spam room or group creation, flooding the socket | Express rate limiting, per-socket event limits, captcha on create if abused |
 | **Room codes are short** (4 letters ≈ 280k combinations) | Someone could guess a code and take an open slot | Longer codes or a private join token in the link |
-| ~~Dev mode available to everyone~~ **Fixed** | Typing numbers instead of showing fingers | **Built:** dev mode is off when `NODE_ENV=production` (the server tells the browser via `/config.js`) |
+| ~~Dev mode available to everyone~~ **Fixed** | Typing numbers instead of showing fingers | **Built:** dev mode only works on local and LAN addresses (`public/config.js`), so it's off on Vercel and the duckdns site |
 
 ---
 

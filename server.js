@@ -27,6 +27,39 @@ const GAME_INPUTS = {
   'game-ready': (game, playerId, payload) => game.setReady(playerId, payload.ready !== false),
 };
 const STUN_SERVERS = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] };
+const CORS_HEADERS = {
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'content-type, x-player-id',
+  'Access-Control-Max-Age': '600',
+};
+
+/** ALLOWED_ORIGINS="https://x.vercel.app, http://localhost:3000" → Set of origins (no trailing slashes). */
+export function allowedOriginsFromEnv(env = process.env) {
+  const origins = new Set();
+  for (const entry of (env.ALLOWED_ORIGINS ?? '').split(',')) {
+    try {
+      if (entry.trim()) origins.add(new URL(entry.trim()).origin);
+    } catch {
+      console.warn(`ALLOWED_ORIGINS: ignoring "${entry.trim()}" (not a URL like https://example.com).`);
+    }
+  }
+  return origins;
+}
+
+/**
+ * Who may call this server from a browser: pages it serves itself (same origin), origins listed
+ * in ALLOWED_ORIGINS, and non-browser clients (no Origin header, e.g. curl and the tests).
+ */
+function isOriginAllowed(req, allowedOrigins) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    return new URL(origin).host === req.headers.host; // Nginx passes the public Host through
+  } catch {
+    return false;
+  }
+}
 
 /** STUN always; TURN too when TURN_URL / TURN_USERNAME / TURN_CREDENTIAL are set. */
 export function iceConfigFromEnv(env = process.env) {
@@ -53,24 +86,36 @@ export function createGameServer({
     console.warn('TURN_URL not set: using STUN only. Calls between some networks may fail.');
   }
 
-  // Dev mode (keys instead of the camera) is for local testing only; production turns it off.
-  const devModeAllowed = env.NODE_ENV !== 'production';
+  // The frontend may be served elsewhere (Vercel); only these origins may call the server.
+  const allowedOrigins = allowedOriginsFromEnv(env);
+  app.use((req, res, next) => {
+    res.vary('Origin');
+    if (!isOriginAllowed(req, allowedOrigins)) {
+      return res.status(403).json({ ok: false, error: 'This site may not use the game server.' });
+    }
+    if (req.headers.origin) res.set({ 'Access-Control-Allow-Origin': req.headers.origin, ...CORS_HEADERS });
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
 
   app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
-  app.get('/config.js', (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.type('text/javascript').send(`export const DEV_MODE_ALLOWED = ${devModeAllowed};\n`);
-  });
   app.get('/ice', (_req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(iceConfig);
   });
   app.use('/api', createApiRouter({ groups }));
-  app.use('/shared', express.static(path.join(__dirname, 'shared')));
   app.use(express.static(path.join(__dirname, 'public')));
 
   const httpServer = http.createServer(app);
-  const io = new Server(httpServer, { pingInterval: PING_INTERVAL_MS, pingTimeout: PING_TIMEOUT_MS });
+  const io = new Server(httpServer, {
+    pingInterval: PING_INTERVAL_MS,
+    pingTimeout: PING_TIMEOUT_MS,
+    serveClient: false, // browsers load the client from a CDN (public/socket.js)
+    // Same origin check as Express: refuse the handshake (polling or WebSocket) from other sites,
+    // and send CORS headers on polling requests from the allowed ones.
+    allowRequest: (req, callback) => callback(null, isOriginAllowed(req, allowedOrigins)),
+    cors: { origin: [...allowedOrigins], methods: ['GET', 'POST'] },
+  });
 
   const games = new Map(); // room code → FriendGame
 

@@ -2,7 +2,7 @@
 // Screens: home → friend → lobby. Opening /?room=ABCD joins that room once a name is set,
 // and /?group=CODE joins that friend group (then opens its leaderboard).
 
-import { io } from '/socket.io/socket.io.esm.min.js';
+import { connectToServer } from './socket.js';
 import { getPlayerId, getSavedName, saveName, cleanName, isDevMode, MAX_NAME_LENGTH } from './player.js';
 import { apiRequest, savePlayerName } from './api.js';
 import { createGroupsPanel, GROUP_CODE_PATTERN, groupPageUrl } from './home-groups.js';
@@ -41,7 +41,7 @@ const groupsPanel = createGroupsPanel({ element: els.groupsPanel, requireName: (
 
 function getSocket() {
   if (socket) return socket;
-  socket = io({ reconnectionDelay: 500, reconnectionDelayMax: 2000 }); // reconnect fast after a blip
+  socket = connectToServer();
 
   socket.on('room-update', handleRoomUpdate);
 

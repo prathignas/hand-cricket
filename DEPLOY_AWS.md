@@ -15,7 +15,26 @@ The live site: **https://handcricket-prathi.duckdns.org**
 | Secrets | `~/hand-cricket/.env`, mode `600`, with `NODE_ENV=production`, `PORT=3000`, TURN and Supabase keys. Never committed; never printed |
 | Health check | `GET /health` → `{"ok":true}` |
 
-In production (`NODE_ENV=production`), dev mode (keyboard numbers) is off.
+Dev mode (keyboard numbers) only works on local and LAN addresses, so it's off here and on Vercel.
+
+## Frontend on Vercel
+
+The frontend (`public/`) is also deployed to Vercel as a static site. It talks to this server through `API_BASE` in `public/config.js`. This server still serves `public/`, so the duckdns URL keeps working as a fallback.
+
+- **Vercel project:** Root Directory `public`, Framework Preset *Other*, no build, output or install command (`public/vercel.json`).
+- **This server** accepts browsers only from its own pages and from the origins in `ALLOWED_ORIGINS` (comma-separated) in `.env`. For example:
+
+  ```
+  ALLOWED_ORIGINS=https://<your-project>.vercel.app,http://localhost:3000
+  ```
+
+  After editing, run `pm2 restart hand-cricket --update-env`.
+- **Origin check from your Mac:**
+
+  ```bash
+  curl -s -o /dev/null -w "%{http_code}\n" -X OPTIONS -H "Origin: https://<your-project>.vercel.app" https://handcricket-prathi.duckdns.org/api/me/groups   # 204
+  curl -s -o /dev/null -w "%{http_code}\n" -H "Origin: https://example.com" https://handcricket-prathi.duckdns.org/ice   # 403
+  ```
 
 ## Connect
 
@@ -70,6 +89,7 @@ curl -s -H "x-player-id: $(uuidgen | tr A-Z a-z)" \
 | SSH times out | Your IP changed | Update the security group SSH rule to your IP `/32` |
 | `502 Bad Gateway` | App not running | `pm2 status`, `pm2 logs hand-cricket --err`, then `pm2 restart hand-cricket` |
 | "Groups are offline" (503 on `/api/...`) | Supabase URL, key or tables | `pm2 logs hand-cricket --err` shows the Supabase message |
+| Vercel site: "Can't reach the game server" / CORS error in the console | Vercel URL missing from `ALLOWED_ORIGINS` (exact origin, `https://`, no path) | Edit `.env`, `pm2 restart hand-cricket --update-env` |
 | Calls don't connect between some networks | TURN missing or wrong | Check the `TURN_*` values in `.env`, then `pm2 restart hand-cricket --update-env` |
 | Certificate warning | Renewal failed | `sudo certbot renew --dry-run`, `systemctl list-timers \| grep certbot` |
 

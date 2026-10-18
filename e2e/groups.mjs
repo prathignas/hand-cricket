@@ -156,7 +156,8 @@ try {
 
   await step('each match was saved exactly once (both players reconnecting doesn\'t double count)', async () => {
     const played = await asha.page.evaluate(async (code) => {
-      const res = await fetch(`/api/groups/${code}/leaderboard?range=all`, {
+      const { API_BASE } = await import('/config.js'); // the page's game server (may be another origin)
+      const res = await fetch(`${API_BASE}/api/groups/${code}/leaderboard?range=all`, {
         headers: { 'x-player-id': localStorage.getItem('handCricket.playerId') },
       });
       return (await res.json()).rows.map((r) => r.played);

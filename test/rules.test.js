@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as rules from '../shared/rules.js';
+import * as rules from '../public/shared/rules.js';
 
 const A = 'a';
 const B = 'b';

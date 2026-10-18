@@ -1,13 +1,14 @@
 // Calls to the game server's /api. Sends this browser's player id; never throws.
 
 import { getPlayerId } from './player.js';
+import { API_BASE } from './config.js';
 
 const OFFLINE = 'Can’t reach the game server. Check your connection and try again.';
 
 /** @returns {Promise<{ ok: boolean, status: number, error?: string, [key: string]: any }>} */
 export async function apiRequest(path, { method = 'GET', body } = {}) {
   try {
-    const response = await fetch(`/api${path}`, {
+    const response = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers: { 'content-type': 'application/json', 'x-player-id': getPlayerId() },
       body: body ? JSON.stringify(body) : undefined,

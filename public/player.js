@@ -55,7 +55,7 @@ const DEV_MODE_KEY = 'handCricket.dev';
 /**
  * Dev mode (?dev=1): keys set your number instead of the camera, for testing on one laptop.
  * Remembered for this tab, so it survives the lobby → game page hop. ?dev=0 turns it off.
- * Always off when the server runs with NODE_ENV=production.
+ * Only on local and LAN addresses (see config.js); always off on the deployed site.
  */
 export function isDevMode() {
   if (!DEV_MODE_ALLOWED) return false;
