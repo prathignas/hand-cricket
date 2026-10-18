@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hand Cricket — Group</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="home.css">
+</head>
+<body>
+  <div class="home group-page">
+    <header class="group-head">
+      <a class="home-logo group-logo" href="/" aria-label="Hand Cricket home">🏏 HAND CRICKET</a>
+      <h1 class="group-name" id="group-name">Loading…</h1>
+      <div class="group-meta">
+        <span class="code-chip" id="group-code"></span>
+        <button class="btn btn-small btn-plain" id="copy-invite" type="button">Copy invite link</button>
+        <span id="copy-status" role="status"></span>
+      </div>
+    </header>
+
+    <main class="board box" id="board" aria-live="polite">
+      <div class="tabs" role="tablist" aria-label="Leaderboard period">
+        <button class="tab" role="tab" id="tab-week" data-range="week" aria-selected="true">THIS WEEK</button>
+        <button class="tab" role="tab" id="tab-all" data-range="all" aria-selected="false">ALL TIME</button>
+      </div>
+      <p class="standing-line" id="standing-line" hidden></p>
+      <div id="board-body"></div>
+    </main>
+
+    <div class="group-actions">
+      <a class="btn" href="/">Play a friend</a>
+      <a class="btn btn-plain" href="/">← Home</a>
+    </div>
+  </div>
+
+  <script type="module" src="group.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hand Cricket</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏏</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <section class="scoreboard box" aria-label="Scoreboard">
+      <div class="side side-me" id="side-me">
+        <div class="side-info">
+          <div class="side-name">YOU</div>
+          <div class="tags">
+            <span class="tag tag-role" id="role-me">—</span>
+            <span class="tag tag-out" id="out-me" hidden>OUT</span>
+          </div>
+        </div>
+        <div class="side-score" id="score-me" aria-live="polite">0</div>
+      </div>
+
+      <div class="center">
+        <div class="center-top">
+          <span class="logo" id="room-label">🏏 HAND CRICKET</span>
+          <button class="sound-toggle" id="sound-toggle" type="button">🔊</button>
+        </div>
+        <div class="target" id="target-bar">ONE WICKET EACH</div>
+        <div class="ball-strip" id="ball-strip" aria-label="Last six balls"></div>
+      </div>
+
+      <div class="side side-opp" id="side-opp">
+        <div class="side-score" id="score-opp" aria-live="polite">0</div>
+        <div class="side-info">
+          <div class="side-name">COMPUTER</div>
+          <div class="tags">
+            <span class="tag tag-role" id="role-opp">—</span>
+            <span class="tag tag-out" id="out-opp" hidden>OUT</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main class="stage">
+      <div class="cards">
+        <article class="card card-me box" id="card-me">
+          <div class="card-label">
+            <span>YOU</span>
+            <span class="card-role" id="card-role-me" hidden></span>
+          </div>
+          <div class="video-wrap">
+            <video id="my-video" class="mirrored" autoplay playsinline muted></video>
+            <canvas id="my-overlay" class="overlay mirrored" aria-hidden="true"></canvas>
+            <div class="finger-badge" id="finger-badge" title="Live finger count">
+              <span class="finger-badge-label">LIVE</span>
+              <span class="finger-badge-value" id="finger-badge-value">–</span>
+            </div>
+            <div class="debug-readout" id="debug-readout" hidden></div>
+            <div class="reveal-number reveal-me" id="reveal-me" hidden></div>
+            <div class="countdown" id="countdown" hidden>
+              <div class="countdown-label">BALL INCOMING</div>
+              <div class="countdown-num" id="countdown-num">3</div>
+            </div>
+            <div class="camera-message" id="camera-message">
+              <p id="camera-message-text">Starting camera…</p>
+              <button class="btn btn-small" data-action="retry-camera" id="retry-camera" hidden>Retry camera</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card card-opp box" id="card-opp">
+          <div class="card-label">
+            <span>COMPUTER</span>
+            <span class="card-role" id="card-role-opp" hidden></span>
+          </div>
+          <div class="video-wrap">
+            <div class="bot-card">
+              <div class="bot-face" aria-hidden="true">🤖</div>
+              <div class="bot-number" id="bot-number">?</div>
+              <div class="bot-caption">SHOWS</div>
+            </div>
+            <div class="sightscreen" id="sightscreen" aria-hidden="true">
+              <span class="sightscreen-label">SIGHTSCREEN</span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <section class="banner" id="message" data-tone="info" aria-live="assertive">
+        <div class="banner-text">
+          <div class="banner-main" id="message-main">GET READY</div>
+          <div class="banner-sub" id="message-sub">Allow the camera to begin</div>
+        </div>
+        <button class="btn btn-small banner-action" id="message-action" data-action="next-ball" hidden>
+          Start <kbd>Space</kbd>
+        </button>
+        <button class="btn btn-small btn-plain banner-action" id="pause-button" data-action="pause" hidden>
+          Pause <kbd>P</kbd>
+        </button>
+      </section>
+
+      <section class="panel box" id="panel" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>

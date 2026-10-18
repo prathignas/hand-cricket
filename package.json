@@ -1,0 +1,25 @@
+{
+  "name": "hand-cricket",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hand cricket over a video call, with webcam finger detection.",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
+    "test": "node --test",
+    "test:e2e": "node e2e/friend-call.mjs && node e2e/friend-match.mjs && node e2e/groups.mjs"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "express": "^5.1.0",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "socket.io-client": "^4.8.4"
+  }
+}
