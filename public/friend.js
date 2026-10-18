@@ -27,6 +27,11 @@ const LEVEL_POLL_MS = 80;
 const MIC_METER_GAIN = 6; // RMS ~0.15 (normal speech) fills the bar
 const TALKING_THRESHOLD = 0.03; // friend's RMS above this counts as talking
 const TALKING_HOLD_MS = 500; // keep "talking" lit briefly between words
+// A dropped friend shows as "reconnecting…" this long before "left": short blips on mobile
+// data (the server notices a silent drop within ~10 s) shouldn't read as leaving.
+const RECONNECT_GRACE_MS = 15000;
+// Reconnect quickly once the network is back (Socket.io's default waits up to 5 s).
+const SOCKET_OPTIONS = { reconnectionDelay: 500, reconnectionDelayMax: 2000 };
 
 const CALL = Object.freeze({
   WAITING: 'waiting', // friend hasn't opened the game screen yet
@@ -108,6 +113,8 @@ const state = {
   call: CALL.WAITING,
   friendKey: null, // "playerId:session" of the friend while they're on this screen
   friendSeen: false,
+  friendLeftAt: 0, // when the friend's connection dropped (local clock)
+  sendingVideo: true,
   serverLost: false,
   leaving: false,
   devMode: isDevMode(),
@@ -131,6 +138,10 @@ let lastFriendSoundAt = 0;
 const myMicMeter = new LevelMeter();
 const friendMicMeter = new LevelMeter();
 let localStream = null;
+// The call sends a copy of the camera track, so it can be switched off during the countdown
+// (anti-peek) without touching your own preview or the hand detector, which use the original.
+let outgoingVideo = null;
+let friendLeftTimer = 0;
 let localMediaReady = Promise.resolve(null);
 const iceConfigReady = loadIceConfig();
 const tracker = new HandTracker(els.myVideo, els.overlay, { onFrame: updateFingerBadge });
@@ -172,7 +183,12 @@ async function setupMedia() {
     state.media = { status: 'ready', error: null, hasMic };
     startTrackingIfReady();
     renderMedia();
-    return stream;
+
+    // What the call sends: the same audio track (so Mute works) and a copy of the video track.
+    const cameraTrack = stream.getVideoTracks()[0];
+    outgoingVideo = cameraTrack ? cameraTrack.clone() : null;
+    if (outgoingVideo) outgoingVideo.enabled = state.sendingVideo;
+    return new MediaStream([...stream.getAudioTracks(), ...(outgoingVideo ? [outgoingVideo] : [])]);
   } catch (error) {
     console.error('Could not start the camera:', error);
     state.media = { status: 'error', error: describeCameraError(error), hasMic: false };
@@ -184,6 +200,17 @@ async function setupMedia() {
 function stopLocalMedia() {
   localStream?.getTracks().forEach((track) => track.stop());
   localStream = null;
+  outgoingVideo?.stop();
+  outgoingVideo = null;
+}
+
+/**
+ * Anti-peek: while a number is being picked, the friend receives black frames instead of
+ * your camera (they're behind the sightscreen anyway). Audio keeps flowing.
+ */
+function setSendingVideo(sending) {
+  state.sendingVideo = sending;
+  if (outgoingVideo) outgoingVideo.enabled = sending;
 }
 
 function setMicEnabled(enabled) {
@@ -247,17 +274,20 @@ function updateFingerBadge({ handSeen, number }) {
 // ---- Socket + room ----------------------------------------------------------
 
 function connectSocket() {
-  socket = io();
+  socket = io(SOCKET_OPTIONS);
   match = createFriendMatch({
     socket,
     playerId: state.playerId,
     els,
     getMyNumber,
     onBackHome: leave,
+    onSendingVideoChange: setSendingVideo,
   });
   socket.on('game-state', (snapshot) => match.handleState(snapshot));
   socket.on('connect', joinRoom); // fires again after every reconnect
   socket.on('disconnect', () => {
+    // Without the server we'd never hear "reveal", so never leave the video off.
+    setSendingVideo(true);
     if (state.leaving) return;
     state.serverLost = true;
     renderSystemNotice();
@@ -617,9 +647,22 @@ setInterval(updateLevels, LEVEL_POLL_MS);
 // ---- Rendering --------------------------------------------------------------
 
 function setCall(call) {
+  if (call === CALL.LEFT && state.call !== CALL.LEFT) {
+    // Start the grace period: "reconnecting…" first, "left" only if they stay away.
+    state.friendLeftAt = Date.now();
+    clearTimeout(friendLeftTimer);
+    friendLeftTimer = setTimeout(renderCallStatus, RECONNECT_GRACE_MS);
+  }
   state.call = call;
-  els.connChip.dataset.state = call;
-  els.connChip.textContent = CALL_CHIP_TEXT[call];
+  renderCallStatus();
+}
+
+const friendProbablyBack = () => Date.now() - state.friendLeftAt < RECONNECT_GRACE_MS;
+
+function renderCallStatus() {
+  const reconnecting = state.call === CALL.LEFT && friendProbablyBack();
+  els.connChip.dataset.state = reconnecting ? CALL.RECONNECTING : state.call;
+  els.connChip.textContent = reconnecting ? CALL_CHIP_TEXT[CALL.RECONNECTING] : CALL_CHIP_TEXT[state.call];
   renderFriendOverlay();
 }
 
@@ -635,7 +678,9 @@ function renderFriendOverlay() {
   const friendName = friendIn(state.room)?.name ?? 'your friend';
   const text = {
     [CALL.WAITING]: `Waiting for ${friendName} to open the game…`,
-    [CALL.LEFT]: `Friend left — waiting for ${friendName} to rejoin…`,
+    [CALL.LEFT]: friendProbablyBack()
+      ? `${friendName}’s connection dropped — reconnecting…`
+      : `Friend left — waiting for ${friendName} to rejoin…`,
   }[state.call];
   els.friendOverlay.hidden = !text;
   els.friendOverlay.classList.toggle('is-left', state.call === CALL.LEFT);

@@ -110,8 +110,10 @@ try {
     assert.equal(scrolls, false);
   });
 
-  await step('friend closes the tab → "Friend left"', async () => {
+  await step('friend closes the tab → "reconnecting…" first, then "Friend left" after the grace period', async () => {
     await guestPage.close();
+    await waitForCall(host.page, 'reconnecting');
+    assert.match(await host.page.textContent('#friend-overlay-text'), /Ravi’s connection dropped — reconnecting/);
     await waitForCall(host.page, 'left');
     assert.match(await host.page.textContent('#friend-overlay-text'), /Friend left/);
   });

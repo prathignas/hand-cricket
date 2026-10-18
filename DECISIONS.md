@@ -160,3 +160,33 @@ Who you are is just the random `playerId` in your browser's localStorage, and th
 - Add Supabase Auth (magic-link email or Google). The browser gets a signed token instead of a bare id, and the server checks the token's signature on every request and socket join, so the player id can't be faked.
 - An old localStorage id can be linked to the new account once, so history carries over.
 - With real accounts, RLS policies could even let the browser read its own groups directly. The server would still be the only writer of match results.
+
+---
+
+## Fixes after SYSTEM_DESIGN.md — sightscreen peek and slow disconnect detection
+
+**1. Sightscreen peek (built).**
+- **Problem:** the sightscreen was only a picture on top of the friend's video. Someone who edited the page could hide it and watch the batter's fingers form during the countdown.
+- **Change:** the call now sends a *copy* of the camera track. From the moment the server starts a countdown until the reveal, that copy is switched off, so the friend receives black frames. Video comes back:
+  - at the reveal
+  - immediately if the game pauses or the server connection drops
+  - after a 4 s safety timer as a backstop
+
+  Innings break and match end keep video on.
+- **Why a copy:** turning off the camera track itself would also blank your own preview and the hand detector, which read the same track, during exactly the moment detection matters.
+- **Alternative:** `replaceTrack(null)` to stop sending entirely. It saves bandwidth, but the friend's picture freezes and takes longer to come back at the reveal.
+- **Trade-off:** you can't see each other while picking (you can still talk), and a tiny bit of bandwidth goes on black frames.
+- **Tested:** the browser test checks that each player's outgoing video is off during the countdown while their own preview stays on, that the friend's received video measures black, that audio keeps flowing, and that video is back at the reveal and when the game pauses.
+
+**2. Faster disconnect detection (built).**
+- **Problem:** Socket.io's default heartbeat (25 s ping + 20 s timeout) took up to ~45 s to notice a silent Wi-Fi drop.
+- **Change:** ping every 5 s, give up after 5 s without a reply, so a silent drop is noticed in 5–10 s (measured about 5.5 s).
+- **Avoiding false "friend left" on slow mobile data:**
+  - a pong is a few bytes, so slow-but-working connections answer in time
+  - clients reconnect within ~2 s once the network is back (`reconnectionDelayMax: 2000`)
+  - for the first 15 s of an absence the friend sees "connection dropped — reconnecting…", and only then "left"
+- **Tested:** a real Socket.io client in a separate process is frozen with SIGSTOP. A 3 s freeze doesn't count as leaving; a permanent freeze is noticed in ~5.5 s.
+- **Alternative:** keep the defaults and accept ~45 s. Zero extra traffic, but a frozen match for nearly a minute.
+- **Trade-off:** one tiny ping per player every 5 s, and a stall over 5 s pauses the match (the batter presses Space once the player is back).
+
+**Bug hit while testing:** a test checked audio by taking two samples back-to-back, saw no change, and failed. It was the test, not the app: samples need time between them. It now measures across the countdown.

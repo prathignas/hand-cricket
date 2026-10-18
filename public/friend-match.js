@@ -33,11 +33,16 @@ const PHASE = Object.freeze({
 const SHOWS_NUMBERS = new Set([PHASE.REVEAL, PHASE.BREAK, PHASE.OVER]);
 const recordKey = (friendId) => `handCricket.h2h.${friendId}`;
 const RESULT_SOUND_DELAY_MS = 500; // let the ball sound finish before the fanfare
+// Video is off from the start of a countdown until the reveal. If the reveal never comes
+// (server stalls), turn it back on this long after the countdown should have resolved.
+const VIDEO_OFF_FAILSAFE_MS = 4000;
+const RECONNECT_GRACE_MS = 15000; // "connection dropped — reconnecting…" before "left"
 
 /**
- * @param {{ socket, playerId: string, els: object, getMyNumber: () => number|null, onBackHome: () => void }} options
+ * @param {{ socket, playerId: string, els: object, getMyNumber: () => number|null, onBackHome: () => void,
+ *           onSendingVideoChange?: (sending: boolean) => void }} options
  */
-export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHome }) {
+export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHome, onSendingVideoChange = () => {} }) {
   let snapshot = null;
   let clockOffset = 0; // server clock minus local clock
   let countdownTimers = [];
@@ -49,6 +54,10 @@ export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHo
   let bumpedBallNo = null;
   let isFirstState = true; // a refresh or rejoin lands mid-match: show it, but don't replay sounds
   let celebratedMatch = null;
+  let sendingVideo = true;
+  let videoFailsafeTimer = 0;
+  let friendAwaySince = null; // local time the friend dropped (for the reconnect grace wording)
+  let graceTimer = 0;
 
   const meId = playerId;
   const friendId = () => snapshot?.players.find((id) => id !== meId);
@@ -98,6 +107,40 @@ export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHo
     );
   }
 
+  /**
+   * Anti-peek: stop sending my camera from the start of a countdown until the reveal, so
+   * nobody can watch fingers form by hiding their sightscreen. Any other phase (or a pause)
+   * turns it straight back on; big moments (break, match end) keep it on.
+   */
+  function syncOutgoingVideo() {
+    const countdown = snapshot.phase === PHASE.COUNTDOWN && !snapshot.paused ? snapshot.countdown : null;
+    setSending(!countdown);
+    clearTimeout(videoFailsafeTimer);
+    if (countdown) {
+      const failsafeIn = toLocalTime(countdown.lockAt) - Date.now() + VIDEO_OFF_FAILSAFE_MS;
+      videoFailsafeTimer = setTimeout(() => setSending(true), Math.max(0, failsafeIn));
+    }
+  }
+
+  function setSending(sending) {
+    if (sending === sendingVideo) return;
+    sendingVideo = sending;
+    onSendingVideoChange(sending);
+  }
+
+  /** Remember when the friend dropped, and re-render once the grace period is over. */
+  function trackFriendAbsence() {
+    const friendAway = snapshot.paused && snapshot.joined[friendId()] && !snapshot.present[friendId()];
+    if (!friendAway) {
+      friendAwaySince = null;
+      clearTimeout(graceTimer);
+      return;
+    }
+    if (friendAwaySince !== null) return;
+    friendAwaySince = Date.now();
+    graceTimer = setTimeout(() => snapshot && render(), RECONNECT_GRACE_MS);
+  }
+
   function clearCountdown() {
     countdownTimers.forEach(clearTimeout);
     countdownTimers = [];
@@ -137,6 +180,8 @@ export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHo
 
     renderBallStrip(els.ballStrip, s.recentBalls ?? []);
     els.sightscreen.classList.toggle('is-down', s.sightscreenDown);
+    syncOutgoingVideo();
+    trackFriendAbsence();
     renderRevealNumbers(lastBall);
     syncCountdown();
     if (s.phase === PHASE.OVER) {
@@ -167,12 +212,14 @@ export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHo
   function bannerFor(s, oppName, lastBall) {
     if (s.paused) {
       const neverJoined = !s.joined[friendId()];
-      return {
-        key: `paused:${neverJoined}`,
-        main: 'PAUSED',
-        sub: neverJoined ? `Waiting for ${oppName} to join…` : `${oppName} left — waiting for them to come back…`,
-        tone: 'info',
-      };
+      // A short drop on mobile data reads as "reconnecting", not "left".
+      const inGrace = friendAwaySince !== null && Date.now() - friendAwaySince < RECONNECT_GRACE_MS;
+      const sub = neverJoined
+        ? `Waiting for ${oppName} to join…`
+        : inGrace
+          ? `${oppName}’s connection dropped — reconnecting…`
+          : `${oppName} left — waiting for them to come back…`;
+      return { key: `paused:${neverJoined}:${inGrace}`, main: 'PAUSED', sub, tone: 'info' };
     }
     const batter = s.match ? nameOf(s.match.batterId) : '';
     switch (s.phase) {
@@ -395,6 +442,9 @@ export function createFriendMatch({ socket, playerId, els, getMyNumber, onBackHo
 
   function dispose() {
     clearCountdown();
+    clearTimeout(videoFailsafeTimer);
+    clearTimeout(graceTimer);
+    setSending(true);
   }
 
   return { handleState, handleAction, handleSpace, dispose };

@@ -11,6 +11,12 @@ import { createApiRouter } from './api.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SWEEP_INTERVAL_MS = 30 * 1000;
+// Heartbeat: the server pings every 5 s and drops a socket that hasn't answered within 5 s,
+// so a silent Wi-Fi drop is noticed in about 10 s (Socket.io's default is up to ~45 s).
+// A pong is a few bytes, so slow mobile data still answers in time; only a full stall
+// longer than 5 s counts, and the client reconnects within ~2 s once the network is back.
+export const PING_INTERVAL_MS = 5000;
+export const PING_TIMEOUT_MS = 5000;
 const SIGNAL_EVENTS = ['offer', 'answer', 'ice-candidate'];
 // Match inputs a player may send. The game itself checks who sent it and whether it fits the phase.
 const GAME_INPUTS = {
@@ -64,7 +70,7 @@ export function createGameServer({
   app.use(express.static(path.join(__dirname, 'public')));
 
   const httpServer = http.createServer(app);
-  const io = new Server(httpServer);
+  const io = new Server(httpServer, { pingInterval: PING_INTERVAL_MS, pingTimeout: PING_TIMEOUT_MS });
 
   const games = new Map(); // room code → FriendGame
 

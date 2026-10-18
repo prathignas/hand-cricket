@@ -9,6 +9,17 @@ const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream',
 
 async function newProfile(label) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, permissions: ['camera', 'microphone'] });
+  // Keep a handle on each RTCPeerConnection so the test can look at what is being sent and received.
+  await context.addInitScript(() => {
+    const Original = window.RTCPeerConnection;
+    window.__pcs = [];
+    window.RTCPeerConnection = function (...args) {
+      const pc = new Original(...args);
+      window.__pcs.push(pc);
+      return pc;
+    };
+    window.RTCPeerConnection.prototype = Original.prototype;
+  });
   const watch = (page) => {
     page.on('pageerror', (e) => errors.push(`${label}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${label} console: ${m.text()}`));
@@ -33,6 +44,33 @@ const waitPanel = (page, pattern, timeout = 15000) =>
   );
 const score = async (page) => `${await page.textContent('#score-me')}-${await page.textContent('#score-opp')}`;
 const setNumber = (page, n) => page.keyboard.press(String(n));
+
+/** What this page sends and receives right now. */
+const media = (page) =>
+  page.evaluate(async () => {
+    // The live call, or the last one if the friend just left and it was closed.
+    const pc = window.__pcs.filter((p) => p.connectionState !== 'closed').at(-1) ?? window.__pcs.at(-1);
+    const sentVideo = pc?.getSenders().find((s) => s.track?.kind === 'video')?.track;
+    const preview = document.getElementById('my-video').srcObject?.getVideoTracks()[0];
+    // Average brightness of the friend's video as received (0 = black).
+    const video = document.getElementById('friend-video');
+    const canvas = Object.assign(document.createElement('canvas'), { width: 32, height: 24 });
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, 32, 24);
+    const pixels = ctx.getImageData(0, 0, 32, 24).data;
+    let sum = 0;
+    for (let i = 0; i < pixels.length; i += 4) sum += pixels[i] + pixels[i + 1] + pixels[i + 2];
+    let audioBytes = 0;
+    if (pc && pc.connectionState !== 'closed') {
+      for (const r of (await pc.getStats()).values()) if (r.type === 'inbound-rtp' && r.kind === 'audio') audioBytes += r.bytesReceived;
+    }
+    return {
+      sendingVideo: sentVideo?.enabled ?? null,
+      previewOn: preview?.enabled ?? null,
+      friendBrightness: Math.round(sum / (pixels.length / 4) / 3),
+      audioBytes,
+    };
+  });
 
 let debugPages = [];
 async function step(name, fn) {
@@ -112,6 +150,17 @@ try {
       })
     );
     assert.ok(Math.abs(shownAt[0] - shownAt[1]) < 300, `countdowns in sync (${shownAt[0] - shownAt[1]} ms apart)`);
+
+    // Anti-peek: during the countdown nobody sends video; previews and audio carry on.
+    const audioAtStart = (await media(bowler.page)).audioBytes;
+    await batter.page.waitForTimeout(900);
+    const during = await Promise.all([batter.page, bowler.page].map(media));
+    for (const m of during) {
+      assert.equal(m.sendingVideo, false, 'outgoing video off during the countdown');
+      assert.equal(m.previewOn, true, 'own preview (and hand detection) unaffected');
+      assert.ok(m.friendBrightness < 8, `friend's video arrives black (brightness ${m.friendBrightness})`);
+    }
+    assert.ok(during[1].audioBytes > audioAtStart, 'audio keeps flowing during the countdown');
     await Promise.all([waitBanner(batter.page, /^\+4$/), waitBanner(bowler.page, /^\+4$/)]);
     for (const p of [batter.page, bowler.page]) {
       assert.equal(await p.$eval('#sightscreen', (e) => e.classList.contains('is-down')), true);
@@ -122,6 +171,11 @@ try {
     assert.equal(await bowler.page.textContent('#reveal-friend'), '4');
     assert.equal(await score(batter.page), '4-0');
     assert.equal(await score(bowler.page), '0-4');
+    await batter.page.waitForTimeout(700); // a few frames
+    for (const m of await Promise.all([batter.page, bowler.page].map(media))) {
+      assert.equal(m.sendingVideo, true, 'video back on at the reveal');
+      assert.ok(m.friendBrightness > 20, `friend visible at the reveal (brightness ${m.friendBrightness})`);
+    }
   });
 
   await step('next ball starts by itself; sightscreen goes back up', async () => {
@@ -171,7 +225,8 @@ try {
     const leaver = bowler;
     await leaver.page.close();
     await waitBanner(batter.page, /PAUSED/);
-    assert.match(await banner(batter.page), new RegExp(`${leaver.label} left`));
+    assert.match(await banner(batter.page), new RegExp(`${leaver.label}’s connection dropped — reconnecting`));
+    assert.equal((await media(batter.page)).sendingVideo, true, 'video back on when the game pauses mid-countdown');
     await batter.page.waitForTimeout(3000);
     assert.equal(await score(batter.page), '5-50', 'no balls while paused');
 

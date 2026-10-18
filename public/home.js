@@ -41,7 +41,7 @@ const groupsPanel = createGroupsPanel({ element: els.groupsPanel, requireName: (
 
 function getSocket() {
   if (socket) return socket;
-  socket = io();
+  socket = io({ reconnectionDelay: 500, reconnectionDelayMax: 2000 }); // reconnect fast after a blip
 
   socket.on('room-update', handleRoomUpdate);
 

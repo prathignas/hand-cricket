@@ -239,3 +239,42 @@ test('Supabase unreachable: API says "offline" (503), and the service key never 
     offline.io.close();
   }
 });
+
+test(
+  'heartbeat: a 3 s stall is not a disconnect; a silent drop is noticed in about 10 s',
+  { skip: process.platform === 'win32' && 'needs SIGSTOP', timeout: 30000 },
+  async (t) => {
+    const { spawn } = await import('node:child_process');
+    const child = spawn(process.execPath, ['test/fixtures/frozen-client.mjs', url, 'player-frozen-0001'], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
+    try {
+      const code = await new Promise((resolve) => child.stdout.once('data', (data) => resolve(String(data).trim())));
+      const watcher = client();
+      await watcher.request('join-room', { code, playerId: 'player-watch-0002', name: 'Watcher' });
+      let droppedAt = null;
+      watcher.on('room-update', (room) => {
+        if (droppedAt === null && room.players[0]?.connected === false) droppedAt = Date.now();
+      });
+
+      // Like a phone in a tunnel for 3 s: pongs come late but within the 5 s timeout.
+      child.kill('SIGSTOP');
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      child.kill('SIGCONT');
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      assert.equal(droppedAt, null, 'a 3 s stall must not look like leaving');
+
+      // Now the network is really gone.
+      const frozenAt = Date.now();
+      child.kill('SIGSTOP');
+      await new Promise((resolve) => {
+        const poll = setInterval(() => droppedAt !== null && (clearInterval(poll), resolve()), 100);
+      });
+      const detectedIn = droppedAt - frozenAt;
+      t.diagnostic(`silent drop noticed in ${detectedIn} ms`);
+      assert.ok(detectedIn <= 11000, `noticed in ${detectedIn} ms`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  }
+);
