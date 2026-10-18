@@ -1,5 +1,7 @@
 // Who this browser is: a random player id and the name they typed. No login.
 
+import { DEV_MODE_ALLOWED } from './config.js';
+
 const PLAYER_ID_KEY = 'handCricket.playerId';
 const NAME_KEY = 'handCricket.name';
 export const MAX_NAME_LENGTH = 20;
@@ -53,8 +55,10 @@ const DEV_MODE_KEY = 'handCricket.dev';
 /**
  * Dev mode (?dev=1): keys set your number instead of the camera, for testing on one laptop.
  * Remembered for this tab, so it survives the lobby → game page hop. ?dev=0 turns it off.
+ * Always off when the server runs with NODE_ENV=production.
  */
 export function isDevMode() {
+  if (!DEV_MODE_ALLOWED) return false;
   const param = new URLSearchParams(location.search).get('dev');
   try {
     if (param === '1') sessionStorage.setItem(DEV_MODE_KEY, '1');

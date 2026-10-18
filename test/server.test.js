@@ -112,6 +112,25 @@ test('/ice gives STUN only without TURN env vars, and adds TURN when set', async
   assert.ok(Array.isArray((await response.json()).iceServers));
 });
 
+test('/health answers 200', async () => {
+  const response = await fetch(`${url}/health`);
+  assert.equal(response.status, 200);
+});
+
+test('/config.js allows dev mode locally and turns it off when NODE_ENV=production', async () => {
+  assert.match(await (await fetch(`${url}/config.js`)).text(), /DEV_MODE_ALLOWED = true/);
+
+  const prod = createGameServer({ env: { NODE_ENV: 'production' } });
+  await new Promise((resolve) => prod.httpServer.listen(0, resolve));
+  try {
+    const response = await fetch(`http://localhost:${prod.httpServer.address().port}/config.js`);
+    assert.match(response.headers.get('content-type'), /javascript/);
+    assert.match(await response.text(), /DEV_MODE_ALLOWED = false/);
+  } finally {
+    prod.io.close();
+  }
+});
+
 test('friend match over sockets: server runs the toss and the ball, ignores the wrong player', async () => {
   const a = client();
   const b = client();

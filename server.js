@@ -47,6 +47,14 @@ export function createGameServer({
     console.warn('TURN_URL not set: using STUN only. Calls between some networks may fail.');
   }
 
+  // Dev mode (keys instead of the camera) is for local testing only; production turns it off.
+  const devModeAllowed = env.NODE_ENV !== 'production';
+
+  app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
+  app.get('/config.js', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.type('text/javascript').send(`export const DEV_MODE_ALLOWED = ${devModeAllowed};\n`);
+  });
   app.get('/ice', (_req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(iceConfig);
