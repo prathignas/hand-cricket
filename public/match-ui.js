@@ -33,25 +33,28 @@ export function showMessage(els, { main, sub = '', tone = 'info' }) {
 
 const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-/** Lightweight CSS confetti over the whole page; cleans itself up after 3 s. */
+/**
+ * Lightweight CSS confetti over the whole page; cleans itself up after 3 s.
+ * With "reduce motion" on: a small, short burst instead (fewer pieces, no spin, a short fall that fades).
+ */
 export function launchConfetti() {
-  if (prefersReducedMotion()) return;
+  const calm = prefersReducedMotion();
   const colors = ['var(--you)', 'var(--opp)', 'var(--six)', 'var(--paper)', 'var(--out)'];
   const layer = document.createElement('div');
-  layer.className = 'confetti';
+  layer.className = calm ? 'confetti is-calm' : 'confetti';
   layer.setAttribute('aria-hidden', 'true');
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < (calm ? 24 : 70); i++) {
     const piece = document.createElement('span');
-    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.left = `${calm ? 25 + Math.random() * 50 : Math.random() * 100}%`;
     piece.style.background = colors[i % colors.length];
-    piece.style.animationDelay = `${Math.random() * 0.4}s`;
-    piece.style.animationDuration = `${1.8 + Math.random() * 0.8}s`;
-    piece.style.setProperty('--drift', `${(Math.random() - 0.5) * 160}px`);
+    piece.style.animationDelay = `${Math.random() * (calm ? 0.15 : 0.4)}s`;
+    piece.style.animationDuration = `${1.8 + Math.random() * 0.8}s`; // calm: fixed in CSS
+    piece.style.setProperty('--drift', `${(Math.random() - 0.5) * (calm ? 60 : 160)}px`);
     piece.style.setProperty('--spin', `${(Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 540)}deg`);
     layer.append(piece);
   }
   document.body.append(layer);
-  setTimeout(() => layer.remove(), 3000);
+  setTimeout(() => layer.remove(), calm ? 1800 : 3000);
 }
 
 // ---- Last six balls -----------------------------------------------------------

@@ -244,6 +244,8 @@ try {
     await setNumber(batter.page, 6);
     await batter.page.keyboard.press('Space');
     await Promise.all([waitPanel(batter.page, /YOU WON!/, 120000), waitPanel(bowler.page, /YOU LOST/, 120000)]);
+    await batter.page.waitForSelector('.confetti span', { timeout: 2000 }); // winner gets confetti
+    assert.equal(await bowler.page.locator('.confetti').count(), 0); // loser doesn't
     assert.match(await panelText(batter.page), new RegExp(`You beat ${bowler.label} \\d+ to 50`));
     assert.match(await panelText(batter.page), /1 won, 0 lost/);
     assert.match(await panelText(bowler.page), /0 won, 1 lost/);

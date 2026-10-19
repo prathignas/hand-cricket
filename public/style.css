@@ -477,9 +477,10 @@
 }
 
 /* ---- Panel (intro / toss / break / match end) floats over the stage ---- */
+/* Sized ~22% smaller than the first version so both players' faces show around it. */
 
 .panel {
-  padding: 18px 20px 20px;
+  padding: 14px 16px 16px;
   text-align: center;
   animation: rise 320ms ease-out both;
 }
@@ -490,7 +491,7 @@
     z-index: 3;
     top: 50%;
     left: 50%;
-    width: min(600px, calc(100% - 48px));
+    width: min(460px, calc(100% - 48px));
     max-height: calc(100% - 24px);
     overflow-y: auto;
     transform: translate(-50%, -50%);
@@ -510,8 +511,8 @@
   line-height: 1.05;
 }
 
-.panel h1 { font-size: clamp(32px, 5vw, 50px); }
-.panel h2 { font-size: clamp(20px, 2.6vw, 28px); }
+.panel h1 { font-size: clamp(26px, 3.9vw, 39px); }
+.panel h2 { font-size: clamp(16px, 2.1vw, 22px); }
 
 .panel p {
   margin: 5px auto;
@@ -520,21 +521,21 @@
 
 .panel .lead {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .panel .muted {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .panel .last-ball {
   display: inline-block;
-  margin-bottom: 6px;
-  padding: 2px 10px;
+  margin-bottom: 5px;
+  padding: 2px 9px;
   border: 2px solid var(--ink);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   background: var(--paper);
 }
@@ -542,6 +543,17 @@
 .panel.tone-won { background-color: var(--you); }
 .panel.tone-lost { background-color: var(--opp); }
 .panel.tone-out { background-color: color-mix(in srgb, var(--out) 18%, var(--paper)); }
+
+/* Pieces inside the panel, scaled down with it (the same pieces elsewhere keep their size). */
+.panel .actions { gap: 10px; margin-top: 11px; }
+.panel .btn:not(.btn-small) { font-size: 15px; padding: 9px 18px; }
+.panel .ready-row { gap: 6px; margin-top: 8px; }
+.panel .ready-pill,
+.panel .group-credit { font-size: 11px; padding: 2px 9px; }
+.panel .coin { width: 70px; height: 70px; margin: 8px auto; font-size: 26px; }
+.panel .status-list { margin-top: 10px; gap: 6px; }
+.panel .status-list li { padding: 6px 10px; font-size: 12px; }
+.panel .legend { gap: 6px; margin-top: 10px; }
 
 .actions {
   display: flex;
@@ -969,6 +981,19 @@
 
 @keyframes confetti-fall {
   to { transform: translate(var(--drift), 108vh) rotate(var(--spin)); }
+}
+
+/* Reduce motion: a short burst near the top that drifts down a little and fades (no spin).
+   !important beats the global reduce-motion rule in base.css, which cuts animations to 1 ms. */
+.confetti.is-calm span {
+  animation-name: confetti-settle;
+  animation-duration: 1.4s !important;
+  animation-timing-function: ease-out;
+}
+
+@keyframes confetti-settle {
+  0%, 65% { opacity: 1; }
+  to { transform: translate(var(--drift), 30vh); opacity: 0; }
 }
 
 /* ---- Papercut touches (small details only) ---- */

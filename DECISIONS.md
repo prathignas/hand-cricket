@@ -104,7 +104,7 @@ Newest step at the bottom.
 
 **Sounds and confetti only for moments seen live:** if you refresh or rejoin onto a reveal or the end screen, the page shows it without replaying the sound or confetti. Each match celebrates once.
 
-**Respecting reduced motion:** with "reduce motion" switched on, confetti is skipped and every other animation is cut to almost nothing.
+**Respecting reduced motion:** with "reduce motion" switched on, every animation is cut to almost nothing, except confetti on a win. It becomes a small, short burst instead: 24 pieces, no spin, a short fall that fades within 1.4 s. *(Changed later: it used to be skipped entirely. Phones often have reduce motion on, so many winners saw no celebration at all.)*
 
 **Bugs:**
 - Caught while writing it, not seen live: the coloured end panels set their colour with the `background` shorthand, which would also have wiped the grain image. They now set only `background-color`.
@@ -203,3 +203,10 @@ Who you are is just the random `playerId` in your browser's localStorage, and th
   - Player ids live in `localStorage`, which is per origin. Someone who used the duckdns URL is a new player on the Vercel URL, and their groups don't carry over.
   - Vercel preview URLs are other origins: they can't reach the server unless they're added to `ALLOWED_ORIGINS`.
 - **Tested:** unit tests for the allow-list (preflight, 403, Socket.io refused). All three browser suites also passed with the frontend on a separate static server (another origin) and the backend enforcing `ALLOWED_ORIGINS`. A page on an unlisted origin was blocked by the browser.
+
+## Smaller centre panel
+
+- **Problem:** the panel in the middle of the game screen (intro, toss, OUT!, innings break, match end) covered both players' faces.
+- **Change:** about 22% smaller: width 600 → 460 px, less padding, headings 50 → 39 px, buttons 18 → 15 px. The pieces inside shrink with it.
+- **Kept the same:** position, colours, style and animation, and everything outside the panel.
+- **Tested:** at 1280×720 the win panel went from 600×281 to 460×240. On a phone (390 wide), where the panel sits below the video cards, its height dropped from 342 to 226 px.
